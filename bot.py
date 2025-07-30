@@ -142,7 +142,6 @@ async def export_excel(update, context):
 def main():
     init_db()
     app = ApplicationBuilder().token(TOKEN).build()
-
     app.add_handler(CommandHandler("start", start))
     app.add_handler(ChatMemberHandler(chat_member_update, ChatMemberHandler.MY_CHAT_MEMBER))
     app.add_handler(MessageHandler(filters.Regex("^🎥 Отправить видео$"), prompt_video))
