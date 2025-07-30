@@ -1,6 +1,8 @@
 import logging
 import os
 import openpyxl
+from dotenv import load_dotenv
+load_dotenv()
 from telegram import Update, ReplyKeyboardMarkup, InputFile
 from telegram.ext import (
     ApplicationBuilder,
@@ -11,8 +13,9 @@ from telegram.ext import (
     filters,
 )
 
+
+
 import io
-import os
 from datetime import datetime
 
 from database import (

@@ -1,13 +1,16 @@
 import psycopg2
 import os
+from dotenv import load_dotenv
+load_dotenv()
 
 DB_PARAMS = {
     "dbname": os.getenv("PG_DB", "bot1_4kgh"),
     "user": os.getenv("PG_USER", "render1"),
     "password": os.getenv("PG_PASSWORD", "HLB78MLx93WjdLdrALoeFNJlpEejVRQo"),
-    "host": os.getenv("PG_HOST", "dpg-d24qojndiees739ihc50-a"),
+    "host": os.getenv("PG_HOST", "dpg-d24qojndiees739ihc50-a.oregon-postgres.render.com"),
     "port": os.getenv("PG_PORT", "5432"),
 }
+
 
 def connect():
     return psycopg2.connect(**DB_PARAMS)
