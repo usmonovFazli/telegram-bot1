@@ -24,7 +24,7 @@ load_dotenv()
 
 TOKEN = os.getenv("BOT_TOKEN", "your_default_token")
 AUTHORIZED_PASSWORD = os.getenv("BOT_PASSWORD")
-LEAVE_PASSWORD = "DELET"
+LEAVE_PASSWORD = "1234"
 
 authorized_users = set()
 leave_confirmations = {}  # user_id: stage
