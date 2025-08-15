@@ -111,11 +111,11 @@ async def chat_member_update(update: Update, context: ContextTypes.DEFAULT_TYPE)
         members = -1
         logging.warning(f"Не удалось получить количество участников: {e}")
 
-    if members != -1 and members < 50:
+    if members != -1 and members < 20:
         try:
             update_channel_status(chat.id, chat_type="left")  # ✅ ДО выхода
             await context.bot.leave_chat(chat.id)
-            logging.info(f"🚪 Покинул чат {chat.title} — участников меньше 50 ({members})")
+            logging.info(f"🚪 Покинул чат {chat.title} — участников меньше 20 ({members})")
         except Exception as e:
             logging.warning(f"❌ Не удалось выйти из {chat.title}: {e}")
         return
