@@ -2,6 +2,8 @@ import psycopg2
 import os
 from dotenv import load_dotenv
 from datetime import datetime
+import openpyxl
+from openpyxl.styles import PatternFill
 
 load_dotenv()
 
@@ -19,6 +21,7 @@ def connect():
 
 
 def init_db():
+    """Инициализация базы данных. Таблица создается только если её нет."""
     with connect() as conn:
         with conn.cursor() as cur:
             cur.execute("""
@@ -32,10 +35,24 @@ def init_db():
                     link TEXT DEFAULT ''
                 );
             """)
+            # Добавляем колонку is_active, если её нет
+            cur.execute("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1
+                        FROM information_schema.columns
+                        WHERE table_name='channels' AND column_name='is_active'
+                    ) THEN
+                        ALTER TABLE channels ADD COLUMN is_active BOOLEAN DEFAULT true;
+                    END IF;
+                END$$;
+            """)
         conn.commit()
 
 
 def add_or_update_channel(chat_id, title, members, chat_type="unknown", link=""):
+    """Добавляет новый канал или обновляет существующий по id."""
     with connect() as conn:
         with conn.cursor() as cur:
             cur.execute("""
@@ -50,7 +67,8 @@ def add_or_update_channel(chat_id, title, members, chat_type="unknown", link="")
         conn.commit()
 
 
-def update_channel_status(chat_id, title=None, members=None, chat_type=None, link=None):
+def update_channel_status(chat_id, title=None, members=None, chat_type=None, link=None, is_active=None):
+    """Обновляет данные канала по id."""
     with connect() as conn:
         with conn.cursor() as cur:
             updates = []
@@ -68,19 +86,21 @@ def update_channel_status(chat_id, title=None, members=None, chat_type=None, lin
             if link is not None:
                 updates.append("link = %s")
                 values.append(link)
+            if is_active is not None:
+                updates.append("is_active = %s")
+                values.append(is_active)
 
             if not updates:
                 return
 
             values.append(chat_id)
-            query = f"""
-                UPDATE channels SET {', '.join(updates)} WHERE id = %s;
-            """
+            query = f"UPDATE channels SET {', '.join(updates)} WHERE id = %s;"
             cur.execute(query, values)
         conn.commit()
 
 
 def increment_video_count(chat_id):
+    """Увеличивает счетчик видео на 1."""
     with connect() as conn:
         with conn.cursor() as cur:
             cur.execute("""
@@ -91,12 +111,93 @@ def increment_video_count(chat_id):
         conn.commit()
 
 
-def get_channels():
+def get_channels(active_only=False):
+    """Возвращает все каналы/группы. Если active_only=True — только активные."""
     with connect() as conn:
         with conn.cursor() as cur:
-            cur.execute("""
-                SELECT id, title, members, videos, date_added, type, link
-                FROM channels
-                ORDER BY date_added;
-            """)
+            if active_only:
+                cur.execute("""
+                    SELECT id, title, members, videos, date_added, type, link
+                    FROM channels
+                    WHERE is_active = true
+                    ORDER BY date_added;
+                """)
+            else:
+                cur.execute("""
+                    SELECT id, title, members, videos, date_added, type, link
+                    FROM channels
+                    ORDER BY date_added;
+                """)
             return cur.fetchall()
+
+
+def delete_channel(chat_id):
+    """Удаляет конкретный канал по id."""
+    with connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM channels WHERE id = %s;", (chat_id,))
+        conn.commit()
+
+
+def export_excel():
+    """Экспорт всей таблицы в Excel."""
+    channels = get_channels()
+    if not channels:
+        return None
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Каналы и группы"
+    ws.append(["ID", "Название", "Участники", "Отправлено видео", "Дата добавления", "Тип", "Ссылка"])
+
+    red_fill = PatternFill(start_color="FFCCCC", end_color="FFCCCC", fill_type="solid")
+    green_fill = PatternFill(start_color="CCFFCC", end_color="CCFFCC", fill_type="solid")
+
+    for row in channels:
+        id_, title, members, videos, date_added, chat_type, link = row
+        date_str = date_added.strftime('%Y-%m-%d %H:%M') if isinstance(date_added, datetime) else str(date_added)
+        data = [id_, title, members, videos, date_str, chat_type, link]
+        ws.append(data)
+        fill = red_fill if chat_type in ["left", "kicked"] else green_fill
+        for col in range(1, len(data)+1):
+            ws.cell(row=ws.max_row, column=col).fill = fill
+
+    file_path = "channels_export.xlsx"
+    wb.save(file_path)
+    return file_path
+
+
+# =========================
+#     ОПТИМИЗАЦИЯ БОТА
+# =========================
+def get_active_channels(limit=300):
+    """Возвращает активные чаты для пакетного обновления."""
+    conn = connect()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT id, title, members, videos, date_added, type
+        FROM channels
+        WHERE is_active = true
+        ORDER BY date_added
+        LIMIT %s
+    """, (limit,))
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return rows
+
+
+def update_chat_members(chat_id, members):
+    """Обновляет количество участников чата."""
+    with connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE channels SET members=%s WHERE id=%s", (members, chat_id))
+        conn.commit()
+
+
+def mark_chat_inactive(chat_id):
+    """Помечает чат как неактивный."""
+    with connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE channels SET is_active=false WHERE id=%s", (chat_id,))
+        conn.commit()
